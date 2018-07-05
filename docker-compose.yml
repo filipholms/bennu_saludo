@@ -1,0 +1,82 @@
+version: '3.2'
+
+services:
+
+  proxy:
+      image: containous/traefik:latest
+      restart: always
+      command: --web --docker --docker.swarmmode --docker.watch --docker.domain=api.bennu.cl --logLevel=DEBUG
+      ports:
+        - 80:80
+        - 8080:8080      
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - /dev/null:/etc/traefik/traefik.toml
+      labels:
+        - "traefik.enable=false"     
+      deploy:
+        replicas: 1   
+        resources:
+          limits:
+           memory: 256M        
+      networks:
+        - backend   
+
+
+  greeting-service:
+      image: bennu/greeting-microservice:1.0.0
+      deploy:
+       replicas: 1         
+       update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+       labels:
+        - "traefik.port=8000"
+        - "traefik.backend=greeting-service"
+        - "traefik.frontend.rule=PathPrefixStrip:/v1/greeting"
+      networks:
+        - backend
+
+
+
+  frontend:
+      image: pizzasteve/front_bennu
+      deploy:
+       replicas: 1         
+       update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+       labels:
+        - "traefik.port=3000"
+        - "traefik.backend=frontend"
+        - "traefik.frontend.rule=PathPrefixStrip:/"
+      networks:
+        - backend
+
+  farewell-service:
+      image: pizzasteve/backend_farewell
+      deploy:
+       replicas: 1         
+       update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+       labels:
+        - "traefik.port=7000"
+        - "traefik.backend=farewell-service"
+        - "traefik.frontend.rule=PathPrefixStrip:/v1/farewell"
+      networks:
+        - backend
+
+
+
+networks:
+  backend:         
+    driver: overlay
+    attachable: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.0.0/16 
